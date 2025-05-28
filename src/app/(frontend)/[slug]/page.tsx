@@ -1,8 +1,7 @@
 import type { Metadata } from 'next'
 
 import { PayloadRedirects } from '@/components/PayloadRedirects'
-import configPromise from '@payload-config'
-import { getPayload, type RequiredDataFromCollectionSlug } from 'payload'
+import { type RequiredDataFromCollectionSlug } from 'payload'
 import { draftMode } from 'next/headers'
 import React, { cache } from 'react'
 import { homeStatic } from '@/endpoints/seed/home-static'
@@ -12,11 +11,10 @@ import { RenderHero } from '@/heros/RenderHero'
 import { generateMeta } from '@/utilities/generateMeta'
 import PageClient from './page.client'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
+import { model } from '@/models'
 
 export async function generateStaticParams() {
-  const payload = await getPayload({ config: configPromise })
-  const pages = await payload.find({
-    collection: 'pages',
+  const pages = await model.page.getMany({
     draft: false,
     limit: 1000,
     overrideAccess: false,
@@ -26,12 +24,12 @@ export async function generateStaticParams() {
     },
   })
 
-  const params = pages.docs
+  const params = pages.models
     ?.filter((doc) => {
-      return doc.slug !== 'home'
+      return doc.get('slug') !== 'home'
     })
-    .map(({ slug }) => {
-      return { slug }
+    .map((m) => {
+      return { slug: m.get('slug') }
     })
 
   return params
@@ -90,11 +88,7 @@ export async function generateMetadata({ params: paramsPromise }: Args): Promise
 
 const queryPageBySlug = cache(async ({ slug }: { slug: string }) => {
   const { isEnabled: draft } = await draftMode()
-
-  const payload = await getPayload({ config: configPromise })
-
-  const result = await payload.find({
-    collection: 'pages',
+  const result = await model.page.getMany({
     draft,
     limit: 1,
     pagination: false,
