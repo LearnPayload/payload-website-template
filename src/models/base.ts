@@ -6,18 +6,24 @@ import { Options } from 'node_modules/payload/dist/collections/operations/local/
 // TODO: find,findOrFail,findMany,findOrCreate,create,update,upsert,delete
 
 export type CastFunction<V> = (value: V) => any
+interface BaseDocument {
+  id: string | number
+  createdAt?: string | Date
+  updatedAt?: string | Date
+}
 
 function castDate(value: string) {
   return new Date(value)
 }
 
-export abstract class ActiveRecord<T> {
+export abstract class ActiveRecord<T extends BaseDocument = BaseDocument> {
   abstract collection: CollectionSlug
   protected casts: Record<string, CastFunction<any>> = {
     createdAt: castDate,
     updatedAt: castDate,
   }
   private attributes: T | null = null
+  private dirtyFields: Record<string, boolean> = {}
 
   setAttributes(data: T): typeof this {
     this.attributes = data
@@ -49,11 +55,26 @@ export abstract class ActiveRecord<T> {
     })
   }
 
+  get isDirty() {
+    console.log({ keys: Object.keys(this.dirtyFields).length > 0 })
+    return Object.keys(this.dirtyFields).length > 0
+  }
+
   get<K extends keyof T>(key: K): T[K] {
     if (!this.attributes) {
       throw new Error('attributes have not been set')
     }
     return this.attributes[key]
+  }
+
+  set<K extends keyof T>(key: K, value: NonNullable<T>[K]) {
+    if (!this.attributes) {
+      throw new Error('attributes have not been set')
+    }
+    const oldValue = this.attributes[key]
+    if (oldValue === value) return
+    this.dirtyFields[key as string] = true
+    this.attributes[key] = value
   }
 
   private async getClient() {
@@ -65,6 +86,7 @@ export abstract class ActiveRecord<T> {
     const result = (await client.findByID({
       collection: this.collection,
       id,
+      depth: 0,
     })) as T
 
     return result
@@ -102,9 +124,28 @@ export abstract class ActiveRecord<T> {
 
     return clone
   }
+
+  async save(updates: Partial<Omit<T, 'id' | 'updatedAt' | 'createdAt'>>) {
+    if (this.attributes === null) return this
+    console.log(`Saving the ${this.collection} collection...`)
+    const client = await this.getClient()
+    const rawData = await this.find(this.attributes.id)
+    const data = { ...rawData, ...updates } as Omit<T, 'id' | 'updatedAt' | 'createdAt'>
+    console.log({ rawData })
+    const updatedData = (await client.update({
+      collection: this.collection,
+      id: this.attributes.id,
+      data,
+    })) as T
+
+    const clone = this.clone()
+    clone.setAttributes(updatedData)
+
+    return clone
+  }
 }
 
-class RecordCollection<T> {
+class RecordCollection<T extends BaseDocument = BaseDocument> {
   constructor(private docs: T[]) {}
   records: ActiveRecord<T>[] = []
 
@@ -138,10 +179,10 @@ class RecordCollection<T> {
     return this.records.forEach(callbackfn)
   }
 
-  *[Symbol.iterator](): Iterator<T> {
+  *[Symbol.iterator](): Iterator<ActiveRecord<T>> {
     for (const key in this.records) {
       if (this.records && this.records.hasOwnProperty(key)) {
-        yield this.records[key] as T
+        yield this.records[key] as ActiveRecord<T>
       }
     }
   }

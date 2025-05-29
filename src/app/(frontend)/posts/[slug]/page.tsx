@@ -15,6 +15,7 @@ import { generateMeta } from '@/utilities/generateMeta'
 import PageClient from './page.client'
 import { LivePreviewListener } from '@/components/LivePreviewListener'
 import { model } from '@/models'
+import { Button } from '@payloadcms/ui'
 
 export async function generateStaticParams() {
   const payload = await getPayload({ config: configPromise })
@@ -48,7 +49,9 @@ export default async function Post({ params: paramsPromise }: Args) {
   const url = '/posts/' + slug
   const post = await queryPostBySlug({ slug })
 
-  if (!post) return <PayloadRedirects url={url} />
+  const postData = post.getAttributes()
+
+  if (!postData) return <PayloadRedirects url={url} />
 
   return (
     <article className="pt-16 pb-16">
@@ -59,15 +62,19 @@ export default async function Post({ params: paramsPromise }: Args) {
 
       {draft && <LivePreviewListener />}
 
-      <PostHero post={post} />
+      <PostHero post={postData} />
 
       <div className="flex flex-col items-center gap-4 pt-8">
         <div className="container">
-          <RichText className="max-w-[48rem] mx-auto" data={post.content} enableGutter={false} />
-          {post.relatedPosts && post.relatedPosts.length > 0 && (
+          <RichText
+            className="max-w-[48rem] mx-auto"
+            data={postData.content}
+            enableGutter={false}
+          />
+          {postData.relatedPosts && postData.relatedPosts.length > 0 && (
             <RelatedPosts
               className="mt-12 max-w-[52rem] lg:grid lg:grid-cols-subgrid col-start-1 col-span-3 grid-rows-[2fr]"
-              docs={post.relatedPosts.filter((post) => typeof post === 'object')}
+              docs={postData.relatedPosts.filter((post) => typeof post === 'object')}
             />
           )}
         </div>
@@ -80,7 +87,7 @@ export async function generateMetadata({ params: paramsPromise }: Args): Promise
   const { slug = '' } = await paramsPromise
   const post = await queryPostBySlug({ slug })
 
-  return generateMeta({ doc: post })
+  return generateMeta({ doc: post.getAttributes() })
 }
 
 const queryPostBySlug = async ({ slug }: { slug: string }) => {
@@ -88,5 +95,5 @@ const queryPostBySlug = async ({ slug }: { slug: string }) => {
 
   const post = await model.post.findBySlug(slug, draft)
 
-  return post.getAttributes()
+  return post
 }
