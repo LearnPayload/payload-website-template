@@ -84,6 +84,24 @@ export abstract class ActiveRecord<T> {
       }
     },
   )
+
+  clone(): ActiveRecord<T> {
+    return new (this.constructor as { new (): ActiveRecord<T> })()
+  }
+
+  /** CRUD */
+  async create(data: Omit<T, 'id' | 'updatedAt' | 'createdAt'>): Promise<ActiveRecord<T>> {
+    const client = await this.getClient()
+    const createdData = (await client.create({
+      collection: this.collection,
+      data,
+    })) as T
+
+    const clone = this.clone()
+    clone.setAttributes(createdData)
+
+    return clone
+  }
 }
 
 class RecordCollection<T> {
