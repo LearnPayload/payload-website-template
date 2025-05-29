@@ -3,29 +3,23 @@ import type { Metadata } from 'next/types'
 import { CollectionArchive } from '@/components/CollectionArchive'
 import { PageRange } from '@/components/PageRange'
 import { Pagination } from '@/components/Pagination'
-import configPromise from '@payload-config'
-import { getPayload } from 'payload'
 import React from 'react'
 import PageClient from './page.client'
+import { model } from '@/models'
 
 export const dynamic = 'force-static'
 export const revalidate = 600
 
 export default async function Page() {
-  const payload = await getPayload({ config: configPromise })
+  const posts = await model.post.getMany()
+  console.log({ posts })
+  for (const doc of posts.docs) {
+    console.log(doc)
+  }
+  const docs = posts.docs.toArray()
+  const firstPost = posts.docs.first()!
 
-  const posts = await payload.find({
-    collection: 'posts',
-    depth: 1,
-    limit: 12,
-    overrideAccess: false,
-    select: {
-      title: true,
-      slug: true,
-      categories: true,
-      meta: true,
-    },
-  })
+  console.log({ firstPost: firstPost.get('createdAt') })
 
   return (
     <div className="pt-24 pb-24">
@@ -45,7 +39,7 @@ export default async function Page() {
         />
       </div>
 
-      <CollectionArchive posts={posts.docs} />
+      <CollectionArchive posts={docs} />
 
       <div className="container">
         {posts.totalPages > 1 && posts.page && (
