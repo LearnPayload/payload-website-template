@@ -1,6 +1,9 @@
 // base.ts
-import { CollectionSlug, getPayload, PaginatedDocs } from 'payload'
+import { CollectionSlug, getPayload, PaginatedDocs, SelectType, Where } from 'payload'
 import config from '@payload-config'
+import { cache } from 'react'
+import { Options } from 'node_modules/payload/dist/collections/operations/local/find'
+import { SelectFromCollectionSlug } from 'node_modules/payload/dist/collections/config/types'
 // TODO: find,findOrFail,findMany,findOrCreate,create,update,upsert,delete
 
 interface BasePaginatedDocs<T> extends Omit<PaginatedDocs<T>, 'docs'> {
@@ -11,7 +14,7 @@ export type CastFunction<V> = (value: V) => any
 
 export abstract class ActiveRecord<T> {
   abstract collection: CollectionSlug
-  abstract casts: Record<keyof T, CastFunction<any>>
+  protected casts: Record<keyof T, CastFunction<any>> | null = null
   private attributes: T | null = null
 
   setAttributes(data: T): typeof this {
@@ -26,11 +29,12 @@ export abstract class ActiveRecord<T> {
 
   castAttributes() {
     if (!this.attributes) return
+    if (this.casts === null) return
     Object.keys(this.attributes!).map((a) => {
-      if (!this.casts[a as keyof T] || !this.attributes) return
+      if (!this.casts![a as keyof T] || !this.attributes) return
       const key = a as keyof T
       const value = this.get(key)
-      this.attributes[key] = this.casts[key](value)
+      this.attributes[key] = this.casts![key](value)
     })
   }
 
@@ -45,23 +49,30 @@ export abstract class ActiveRecord<T> {
     return await getPayload({ config })
   }
 
-  async getMany(): Promise<BasePaginatedDocs<T>> {
+  async find(id: string | number): Promise<T> {
     const client = await this.getClient()
-    const results = (await client.find({
+    const result = (await client.findByID({
       collection: this.collection,
-    })) as PaginatedDocs<T>
+      id,
+    })) as T
 
-    console.log({ results })
-
-    return {
-      ...results,
-      docs: new RecordCollection(results.docs).hydrate(this),
-    }
+    return result
   }
 
-  // You can add more instance methods here later, like findById, create, update, delete etc.
-  // For example:
-  // async findById(id: string): Promise<T | undefined> { /* ... */ }
+  findMany = cache(
+    async (options: Omit<Options<CollectionSlug, SelectType>, 'collection'> = {}) => {
+      const client = await this.getClient()
+      const results = (await client.find({
+        ...options,
+        collection: this.collection,
+      })) as PaginatedDocs<T>
+
+      return {
+        ...results,
+        docs: new RecordCollection(results.docs).hydrate(this),
+      }
+    },
+  )
 }
 
 class RecordCollection<T> {
@@ -88,6 +99,14 @@ class RecordCollection<T> {
 
   first(): ActiveRecord<T> {
     return this.records.at(0) as ActiveRecord<T>
+  }
+
+  count(): number {
+    return this.records.length
+  }
+
+  each(callbackfn: (value: ActiveRecord<T>, index: number, array: ActiveRecord<T>[]) => void) {
+    return this.records.forEach(callbackfn)
   }
 
   *[Symbol.iterator](): Iterator<T> {

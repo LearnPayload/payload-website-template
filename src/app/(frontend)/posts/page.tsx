@@ -11,11 +11,15 @@ export const dynamic = 'force-static'
 export const revalidate = 600
 
 export default async function Page() {
-  const posts = await model.post.getMany()
+  const posts = await model.post.findMany()
   console.log({ posts })
   for (const doc of posts.docs) {
     console.log(doc)
   }
+
+  posts.docs.each((d) => {
+    console.log(d.get('createdAt'))
+  })
   const docs = posts.docs.toArray()
   const firstPost = posts.docs.first()!
 
