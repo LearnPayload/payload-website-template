@@ -5,11 +5,11 @@ import { notFound } from 'next/navigation'
 
 export class Post extends ActiveRecord<PostType> {
   override collection: CollectionSlug = 'posts'
-  override casts: Record<string, CastFunction<keyof PostType>> = {
-    createdAt: (value: PostType['createdAt']) => {
-      return new Date(value)
-    },
-  }
+  // override casts: Record<string, CastFunction<keyof PostType>> = {
+  //   createdAt: (value: PostType['createdAt']) => {
+  //     return new Date(value)
+  //   },
+  // }
 
   async findBySlug(
     slug: PostType['slug'],

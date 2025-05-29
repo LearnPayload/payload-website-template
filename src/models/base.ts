@@ -3,23 +3,26 @@ import { CollectionSlug, getPayload, PaginatedDocs, SelectType, Where } from 'pa
 import config from '@payload-config'
 import { cache } from 'react'
 import { Options } from 'node_modules/payload/dist/collections/operations/local/find'
-import { SelectFromCollectionSlug } from 'node_modules/payload/dist/collections/config/types'
 // TODO: find,findOrFail,findMany,findOrCreate,create,update,upsert,delete
-
-interface BasePaginatedDocs<T> extends Omit<PaginatedDocs<T>, 'docs'> {
-  docs: RecordCollection<T>
-}
 
 export type CastFunction<V> = (value: V) => any
 
+function castDate(value: string) {
+  return new Date(value)
+}
+
 export abstract class ActiveRecord<T> {
   abstract collection: CollectionSlug
-  protected casts: Record<keyof T, CastFunction<any>> | null = null
+  protected casts: Record<string, CastFunction<any>> = {
+    createdAt: castDate,
+    updatedAt: castDate,
+  }
   private attributes: T | null = null
 
   setAttributes(data: T): typeof this {
     this.attributes = data
     this.castAttributes()
+
     return this
   }
 
@@ -27,14 +30,22 @@ export abstract class ActiveRecord<T> {
     return this.attributes
   }
 
-  castAttributes() {
+  async castAttributes() {
+    const payloadConfig = await config
+    const fields = payloadConfig.collections.find(
+      (c) => c.slug === this.collection,
+    )?.flattenedFields
+
+    const dateFields = fields?.find((f) => f.type === 'date')
+    console.log({
+      dateFields,
+    })
     if (!this.attributes) return
     if (this.casts === null) return
-    Object.keys(this.attributes!).map((a) => {
-      if (!this.casts![a as keyof T] || !this.attributes) return
-      const key = a as keyof T
-      const value = this.get(key)
-      this.attributes[key] = this.casts![key](value)
+    Object.keys(this.attributes!).map((key) => {
+      if (!this.casts![key] || !this.attributes) return
+      const value = this.get(key as keyof T)
+      this.attributes[key as keyof T] = this.casts![key](value)
     })
   }
 
